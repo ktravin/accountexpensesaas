@@ -1,0 +1,277 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  ACCOUNTANT
+  VIEWER
+}
+
+enum Currency {
+  USD
+  INR
+}
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  INCOME
+  EXPENSE
+}
+
+enum PaymentStatus {
+  PENDING
+  PARTIAL
+  PAID
+  OVERPAID
+  VOID
+}
+
+enum PaymentMode {
+  BANK_TRANSFER
+  CARD
+  CASH
+  UPI
+  CHECK
+  OTHER
+}
+
+enum ExpenseCategory {
+  TRAVEL
+  FOOD
+  SALARY
+  RENT
+  CLOUD
+  SOFTWARE
+  MARKETING
+  MISCELLANEOUS
+}
+
+enum ReportType {
+  BALANCE_SHEET
+  PROFIT_LOSS
+  TRIAL_BALANCE
+  CASH_FLOW
+  EXPENSE_SUMMARY
+  CLIENT_STATEMENT
+  OUTSTANDING_RECEIVABLES
+}
+
+model Organization {
+  id           String   @id @default(uuid())
+  name         String
+  baseCurrency Currency @default(USD)
+  users        User[]
+  clients      Client[]
+  accounts     Account[]
+  receipts     Receipt[]
+  expenses     Expense[]
+  journalEntries JournalEntry[]
+  exchangeRates ExchangeRate[]
+  auditLogs    AuditLog[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model User {
+  id             String   @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String
+  email          String   @unique
+  passwordHash   String
+  role           Role     @default(ACCOUNTANT)
+  passwordResetToken String?
+  passwordResetExpires DateTime?
+  auditLogs      AuditLog[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  deletedAt      DateTime?
+
+  @@index([organizationId, role])
+}
+
+model Client {
+  id                 String   @id @default(uuid())
+  organizationId     String
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name               String
+  companyName        String?
+  email              String
+  phone              String?
+  country            String
+  currencyPreference Currency @default(USD)
+  taxNumber          String?
+  billingAddress     String?
+  openingBalance     Decimal  @default(0) @db.Decimal(18, 2)
+  notes              String?
+  receipts           Receipt[]
+  auditLogs          AuditLog[]
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  deletedAt          DateTime?
+
+  @@index([organizationId, deletedAt])
+  @@index([organizationId, name])
+  @@unique([organizationId, email])
+}
+
+model Account {
+  id             String @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  code           String
+  name           String
+  type           AccountType
+  currency       Currency @default(USD)
+  isSystem       Boolean @default(false)
+  ledgerEntries  LedgerEntry[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  deletedAt      DateTime?
+
+  @@unique([organizationId, code])
+  @@index([organizationId, type])
+}
+
+model JournalEntry {
+  id             String @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  entryDate      DateTime
+  memo           String
+  sourceType     String
+  sourceId       String?
+  locked         Boolean @default(true)
+  ledgerEntries  LedgerEntry[]
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, entryDate])
+  @@index([sourceType, sourceId])
+}
+
+model LedgerEntry {
+  id             String @id @default(uuid())
+  journalEntryId String
+  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
+  accountId      String
+  account        Account @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  debit          Decimal @default(0) @db.Decimal(18, 2)
+  credit         Decimal @default(0) @db.Decimal(18, 2)
+  currency       Currency
+  exchangeRate   Decimal @default(1) @db.Decimal(18, 6)
+  baseDebit      Decimal @default(0) @db.Decimal(18, 2)
+  baseCredit     Decimal @default(0) @db.Decimal(18, 2)
+  createdAt      DateTime @default(now())
+
+  @@index([accountId])
+  @@index([journalEntryId])
+}
+
+model Receipt {
+  id             String @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  clientId       String
+  client         Client @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  invoiceNumber  String
+  paymentDate    DateTime
+  dueDate        DateTime?
+  currency       Currency
+  exchangeRate   Decimal @db.Decimal(18, 6)
+  amount         Decimal @db.Decimal(18, 2)
+  convertedAmount Decimal @db.Decimal(18, 2)
+  paymentMode    PaymentMode
+  bankReference  String?
+  category       String
+  notes          String?
+  status         PaymentStatus @default(PAID)
+  attachmentUrl  String?
+  journalEntryId String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  deletedAt      DateTime?
+
+  @@index([organizationId, paymentDate])
+  @@index([organizationId, status])
+  @@unique([organizationId, invoiceNumber])
+}
+
+model Expense {
+  id             String @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  vendor         String
+  category       ExpenseCategory
+  expenseDate    DateTime
+  amount         Decimal @db.Decimal(18, 2)
+  currency       Currency
+  exchangeRate   Decimal @db.Decimal(18, 6)
+  convertedAmount Decimal @db.Decimal(18, 2)
+  taxAmount      Decimal @default(0) @db.Decimal(18, 2)
+  paymentMode    PaymentMode
+  notes          String?
+  receiptUrl     String?
+  recurring      Boolean @default(false)
+  nextDueDate    DateTime?
+  journalEntryId String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  deletedAt      DateTime?
+
+  @@index([organizationId, expenseDate])
+  @@index([organizationId, category])
+}
+
+model ExchangeRate {
+  id             String @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  fromCurrency   Currency
+  toCurrency     Currency
+  rate           Decimal @db.Decimal(18, 6)
+  effectiveDate  DateTime
+  createdAt      DateTime @default(now())
+
+  @@unique([organizationId, fromCurrency, toCurrency, effectiveDate])
+}
+
+model Budget {
+  id             String @id @default(uuid())
+  organizationId String
+  category       ExpenseCategory
+  month          DateTime
+  amount         Decimal @db.Decimal(18, 2)
+  currency       Currency
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId, month])
+}
+
+model AuditLog {
+  id             String @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String?
+  user           User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  clientId       String?
+  client         Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  entityType     String
+  entityId       String
+  action         String
+  before         Json?
+  after          Json?
+  ipAddress      String?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, entityType, entityId])
+  @@index([createdAt])
+}
