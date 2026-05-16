@@ -1,0 +1,9 @@
+.next
+node_modules
+.env
+.env*.local
+public/uploads/*
+!public/uploads/.gitkeep
+coverage
+dist
+*.tsbuildinfo

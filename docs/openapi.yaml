@@ -1,0 +1,72 @@
+openapi: 3.1.0
+info:
+  title: Ledgerly Accounting API
+  version: 1.0.0
+servers:
+  - url: http://localhost:3000
+paths:
+  /api/auth/register:
+    post:
+      summary: Register an organization admin
+      responses:
+        "201": { description: Created }
+  /api/auth/login:
+    post:
+      summary: Login and set JWT session cookie
+      responses:
+        "200": { description: Authenticated }
+  /api/clients:
+    get:
+      summary: List clients with search and pagination
+      responses:
+        "200": { description: Client page }
+    post:
+      summary: Create a client
+      responses:
+        "201": { description: Created }
+  /api/receipts:
+    get:
+      summary: List incoming receipts
+      responses:
+        "200": { description: Receipt page }
+    post:
+      summary: Create a receipt and post double-entry journal
+      responses:
+        "201": { description: Created }
+  /api/expenses:
+    get:
+      summary: List expenses
+      responses:
+        "200": { description: Expense page }
+    post:
+      summary: Create an expense and post double-entry journal
+      responses:
+        "201": { description: Created }
+  /api/dashboard:
+    get:
+      summary: Dashboard metrics, trends, analytics, and AI-style insights
+      responses:
+        "200": { description: Dashboard payload }
+  /api/ledger/trial-balance:
+    get:
+      summary: Trial balance generated from immutable ledger entries
+      responses:
+        "200": { description: Trial balance }
+  /api/reports/{type}/export:
+    get:
+      summary: Export a report as PDF or XLSX
+      parameters:
+        - name: type
+          in: path
+          required: true
+          schema: { type: string, enum: [balance-sheet, profit-loss, trial-balance, expense-summary, outstanding-receivables] }
+        - name: format
+          in: query
+          schema: { type: string, enum: [pdf, xlsx] }
+      responses:
+        "200": { description: Binary report file }
+  /api/uploads:
+    post:
+      summary: Upload validated receipt or invoice files
+      responses:
+        "201": { description: File URL and OCR queue status }
